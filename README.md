@@ -34,19 +34,17 @@ pip install -r requirements.txt
 Create a `.env` file:
 
 ```env
-APP_NAME=Portfolio
-
-MAIL_HOST=smtp.gmail.com
+MAILER=xxxxxxxx
+MAIL_HOST=xxxxxxxxxxxxx
 MAIL_PORT=465
 MAIL_USERNAME=your-email@gmail.com
 MAIL_PASSWORD=your-app-password
-
+MAIL_ENCRYPTION=xxxxx
 MAIL_FROM=your-email@gmail.com
 MAIL_FROM_NAME=Portfolio
 MAIL_TO=your-email@gmail.com
 
 API_KEY=your-secret-api-key
-PORT=8000
 ```
 
 ## Run the Application
