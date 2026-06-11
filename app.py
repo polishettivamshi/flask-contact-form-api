@@ -19,6 +19,14 @@ MAIL_FROM_NAME = os.getenv("MAIL_FROM_NAME", "Portfolio")
 MAIL_TO = os.getenv("MAIL_TO", MAIL_USERNAME)
 API_KEY = os.getenv("API_KEY")
 
+
+@app.route("/ping", methods=["GET"])
+def ping():
+    return jsonify({
+        "success": True,
+        "message": "pong"
+    })
+
 @app.route("/send-email", methods=["POST"])
 def send_email():
     client_api_key = request.headers.get("X-API-Key")
