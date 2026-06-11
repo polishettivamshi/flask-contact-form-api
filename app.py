@@ -5,10 +5,12 @@ from email.mime.text import MIMEText
 
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
+from flask_cors import CORS
 
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app)
 
 MAIL_HOST = os.getenv("MAIL_HOST")
 MAIL_PORT = int(os.getenv("MAIL_PORT", 465))
@@ -36,7 +38,13 @@ def send_email():
             "success": False,
             "message": "Unauthorized"
         }), 401
-    data = request.get_json()
+    data = request.get_json(silent=True)
+
+    if not data:
+        return jsonify({
+            "success": False,
+            "message": "Invalid JSON payload."
+        }), 400
 
     name = data.get("name")
     email = data.get("email")
