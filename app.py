@@ -1,8 +1,8 @@
 import os
-import smtplib
+import json
+import urllib.error
+import urllib.request
 from html import escape
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 
 from flask import Flask, request, jsonify, current_app
 from dotenv import load_dotenv
@@ -31,21 +31,16 @@ def get_env(name, default=None):
     return value
 
 
-MAIL_HOST = get_env("MAIL_HOST")
-MAIL_PORT = int(get_env("MAIL_PORT", 465))
-MAIL_USERNAME = get_env("MAIL_USERNAME")
-MAIL_PASSWORD = get_env("MAIL_PASSWORD")
-MAIL_FROM = get_env("MAIL_FROM")
+RESEND_API_URL = get_env("RESEND_API_URL", "https://api.resend.com/emails")
+RESEND_API_KEY = get_env("RESEND_API_KEY")
+RESEND_FROM = get_env("RESEND_FROM", "Portfolio <onboarding@resend.dev>")
 MAIL_FROM_NAME = get_env("MAIL_FROM_NAME", "Portfolio")
-MAIL_TO = get_env("MAIL_TO", MAIL_USERNAME)
+MAIL_TO = get_env("MAIL_TO")
 API_KEY = get_env("API_KEY")
 
 REQUIRED_EMAIL_CONFIG = {
-    "MAIL_HOST": MAIL_HOST,
-    "MAIL_PORT": MAIL_PORT,
-    "MAIL_USERNAME": MAIL_USERNAME,
-    "MAIL_PASSWORD": MAIL_PASSWORD,
-    "MAIL_FROM": MAIL_FROM,
+    "RESEND_API_KEY": RESEND_API_KEY,
+    "RESEND_FROM": RESEND_FROM,
     "MAIL_TO": MAIL_TO,
     "API_KEY": API_KEY,
 }
@@ -99,55 +94,71 @@ def send_email():
             "message": "Email service is not configured."
         }), 500
 
+    text_body = f"""Name: {name}
+Email: {email}
+
+Message:
+{message}
+"""
+
+    html_body = f"""
+        <h2 style="margin-bottom:0;">{escape(MAIL_FROM_NAME)} Contact Form Message:</h2>
+        <hr style="margin:0; border:0; border-top:1px solid #000;">
+
+        <p><strong>Name:</strong> {escape(name)}</p>
+        <p><strong>Email:</strong> {escape(email)}</p>
+        <p><strong>Message:</strong></p>
+        <p>{escape(message).replace("\n", "<br>")}</p>
+    """
+
+    payload = {
+        "from": RESEND_FROM,
+        "to": [MAIL_TO],
+        "subject": f"{MAIL_FROM_NAME} Contact Form: {name}",
+        "html": html_body,
+        "text": text_body,
+        "reply_to": email,
+    }
+
     try:
-        msg = MIMEMultipart("alternative")
+        request_body = json.dumps(payload).encode("utf-8")
+        resend_request = urllib.request.Request(
+            RESEND_API_URL,
+            data=request_body,
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "User-Agent": "flask-contact-form-api/1.0",
+            },
+            method="POST",
+        )
 
-        msg["Subject"] = f"{MAIL_FROM_NAME} Contact Form: {name}"
-        msg["From"] = f"{MAIL_FROM_NAME} <{MAIL_FROM}>"
-        msg["To"] = MAIL_TO
-        msg["Reply-To"] = email
-
-        text_body = f"""
-            Name: {name}
-            Email: {email}
-
-            Message:
-            {message}
-        """
-
-        html_body = f"""
-            <h2 style="margin-bottom:0;">{escape(MAIL_FROM_NAME)} Contact Form Message:</h2>
-            <hr style="margin:0; border:0; border-top:1px solid #000;">
-
-            <p><strong>Name:</strong> {escape(name)}</p>
-            <p><strong>Email:</strong> {escape(email)}</p>
-            <p><strong>Message:</strong></p>
-            <p>{escape(message).replace("\n", "<br>")}</p>
-        """
-
-        msg.attach(MIMEText(text_body, "plain"))
-        msg.attach(MIMEText(html_body, "html"))
-
-        with smtplib.SMTP_SSL(MAIL_HOST, MAIL_PORT, timeout=30) as server:
-            server.login(MAIL_USERNAME, MAIL_PASSWORD)
-            server.sendmail(
-                MAIL_FROM,
-                MAIL_TO,
-                msg.as_string()
-            )
+        with urllib.request.urlopen(resend_request, timeout=30) as response:
+            response_body = response.read().decode("utf-8")
+            current_app.logger.info("Resend email sent: %s", response_body)
 
         return jsonify({
             "success": True,
             "message": "Message sent successfully."
         })
 
+    except urllib.error.HTTPError as error:
+        error_body = error.read().decode("utf-8", errors="replace")
+        current_app.logger.error(
+            "Resend API error. status=%s body=%s",
+            error.code,
+            error_body
+        )
+        return jsonify({
+            "success": False,
+            "message": "Unable to send email."
+        }), 500
+
     except Exception:
         current_app.logger.exception(
-            "SMTP Error while sending contact form email. host=%s port=%s username=%s from=%s to=%s",
-            MAIL_HOST,
-            MAIL_PORT,
-            MAIL_USERNAME,
-            MAIL_FROM,
+            "Resend request failed while sending contact form email. from=%s to=%s",
+            RESEND_FROM,
             MAIL_TO
         )
         return jsonify({
