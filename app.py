@@ -10,7 +10,18 @@ from flask_cors import CORS
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={
+    r"/send-email": {
+        "origins": "*",
+        "methods": ["POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "X-API-Key"],
+        "supports_credentials": False,
+        "max_age": 86400
+    },
+    r"/ping": {
+        "origins": "*"
+    }
+})
 
 MAIL_HOST = os.getenv("MAIL_HOST")
 MAIL_PORT = int(os.getenv("MAIL_PORT", 465))
