@@ -1,9 +1,10 @@
 import os
 import smtplib
+from html import escape
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, current_app
 from dotenv import load_dotenv
 from flask_cors import CORS
 
@@ -23,14 +24,31 @@ CORS(app, resources={
     }
 })
 
-MAIL_HOST = os.getenv("MAIL_HOST")
-MAIL_PORT = int(os.getenv("MAIL_PORT", 465))
-MAIL_USERNAME = os.getenv("MAIL_USERNAME")
-MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
-MAIL_FROM = os.getenv("MAIL_FROM")
-MAIL_FROM_NAME = os.getenv("MAIL_FROM_NAME", "Portfolio")
-MAIL_TO = os.getenv("MAIL_TO", MAIL_USERNAME)
-API_KEY = os.getenv("API_KEY")
+def get_env(name, default=None):
+    value = os.getenv(name, default)
+    if isinstance(value, str):
+        return value.strip().strip('"').strip("'")
+    return value
+
+
+MAIL_HOST = get_env("MAIL_HOST")
+MAIL_PORT = int(get_env("MAIL_PORT", 465))
+MAIL_USERNAME = get_env("MAIL_USERNAME")
+MAIL_PASSWORD = get_env("MAIL_PASSWORD")
+MAIL_FROM = get_env("MAIL_FROM")
+MAIL_FROM_NAME = get_env("MAIL_FROM_NAME", "Portfolio")
+MAIL_TO = get_env("MAIL_TO", MAIL_USERNAME)
+API_KEY = get_env("API_KEY")
+
+REQUIRED_EMAIL_CONFIG = {
+    "MAIL_HOST": MAIL_HOST,
+    "MAIL_PORT": MAIL_PORT,
+    "MAIL_USERNAME": MAIL_USERNAME,
+    "MAIL_PASSWORD": MAIL_PASSWORD,
+    "MAIL_FROM": MAIL_FROM,
+    "MAIL_TO": MAIL_TO,
+    "API_KEY": API_KEY,
+}
 
 
 @app.route("/ping", methods=["GET"])
@@ -67,6 +85,20 @@ def send_email():
             "message": "Name, email, and message are required."
         }), 400
 
+    missing_config = [
+        key for key, value in REQUIRED_EMAIL_CONFIG.items()
+        if value is None or value == ""
+    ]
+    if missing_config:
+        current_app.logger.error(
+            "Missing email configuration: %s",
+            ", ".join(missing_config)
+        )
+        return jsonify({
+            "success": False,
+            "message": "Email service is not configured."
+        }), 500
+
     try:
         msg = MIMEMultipart("alternative")
 
@@ -84,19 +116,19 @@ def send_email():
         """
 
         html_body = f"""
-            <h2 style="margin-bottom:0;">{MAIL_FROM_NAME} Contact Form Message:</h2>
+            <h2 style="margin-bottom:0;">{escape(MAIL_FROM_NAME)} Contact Form Message:</h2>
             <hr style="margin:0; border:0; border-top:1px solid #000;">
 
-            <p><strong>Name:</strong> {name}</p>
-            <p><strong>Email:</strong> {email}</p>
+            <p><strong>Name:</strong> {escape(name)}</p>
+            <p><strong>Email:</strong> {escape(email)}</p>
             <p><strong>Message:</strong></p>
-            <p>{message}</p>
+            <p>{escape(message).replace("\n", "<br>")}</p>
         """
 
         msg.attach(MIMEText(text_body, "plain"))
         msg.attach(MIMEText(html_body, "html"))
 
-        with smtplib.SMTP_SSL(MAIL_HOST, MAIL_PORT) as server:
+        with smtplib.SMTP_SSL(MAIL_HOST, MAIL_PORT, timeout=30) as server:
             server.login(MAIL_USERNAME, MAIL_PASSWORD)
             server.sendmail(
                 MAIL_FROM,
@@ -109,8 +141,15 @@ def send_email():
             "message": "Message sent successfully."
         })
 
-    except Exception as e:
-        print(f"SMTP Error: {e}")
+    except Exception:
+        current_app.logger.exception(
+            "SMTP Error while sending contact form email. host=%s port=%s username=%s from=%s to=%s",
+            MAIL_HOST,
+            MAIL_PORT,
+            MAIL_USERNAME,
+            MAIL_FROM,
+            MAIL_TO
+        )
         return jsonify({
             "success": False,
             "message": "Unable to send email."
