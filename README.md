@@ -1,6 +1,6 @@
 # Contact Form API
 
-A simple Flask API that sends contact form submissions to an email address using SMTP.
+A simple Flask API that sends contact form submissions to an email address using Resend.
 
 ## Features
 
@@ -12,7 +12,7 @@ A simple Flask API that sends contact form submissions to an email address using
 ## Requirements
 
 * Python 3.10+
-* Gmail App Password (or SMTP credentials)
+* Resend API key
 
 ## Installation
 
@@ -34,18 +34,15 @@ pip install -r requirements.txt
 Create a `.env` file:
 
 ```env
-MAILER=xxxxxxxx
-MAIL_HOST=xxxxxxxxxxxxx
-MAIL_PORT=465
-MAIL_USERNAME=your-email@gmail.com
-MAIL_PASSWORD=your-app-password
-MAIL_ENCRYPTION=xxxxx
-MAIL_FROM=your-email@gmail.com
+RESEND_API_KEY=your-resend-api-key
+RESEND_FROM=Portfolio <onboarding@resend.dev>
 MAIL_FROM_NAME=Portfolio
 MAIL_TO=your-email@gmail.com
 
 API_KEY=your-secret-api-key
 ```
+
+`RESEND_FROM` must be a sender allowed by your Resend account. For quick testing, Resend supports `onboarding@resend.dev`; for production, verify your own domain in Resend and use an address from that domain.
 
 ## Run the Application
 
